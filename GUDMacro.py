@@ -2,18 +2,126 @@ from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
 from time import sleep
+import os
 import re
 
-# print()
-# print("*********** 필 독 ***********")
-# print("1. 크롬 드라이버를 설치해주세요. <참고 https://chromedriver.chromium.org/downloads>")
-# print("1.1 크롬 드라이버 버전을 확인하고 싶다면 크롬 주소창에 chrome://version를 입력해주신 뒤 제일 상단에 숫자를 확인하시면 됩니다.")
-# print("2. 설치한 chromedriver.exe를 파일에 함께 넣어주신 뒤 실행해주세요.")
-# print()
-# print("=" * 60)
+# driver 작업
+options = webdriver.ChromeOptions()
+options.add_experimental_option('excludeSwitches', ['enable-logging'])
+driver = webdriver.Chrome(options=options)
+driver.set_window_position(0, 0)
+driver.set_window_size(700, 1000)
+
+# 콘솔 작업
+COLLEGE = "경운대학교"
+VERSION = "2.0.1"
+print("=" * 60)
+print(COLLEGE + "LMS 강의 매크로(" + VERSION + ") made by K.J.H")
+print("=" * 60)
+
+# XPATH, URL, 전역 변수
+LOGINURL = 'https://lms.ikw.ac.kr/ilos/main/member/login_form.acl'
+LOGINBUTTON = '//*[@id="login_btn"]'
+
+global currentSubNum
+currentSubNum = 0
+global subNum
+subNum = 0
+global lectureBuffer
+lectureBuffer = []  # lecture number를 받는 버퍼
+global completeLectureNum
+completeLectureNum = 0
 
 
+# 로그인
+def Login():
+    while True:
+        id = input("아이디 : ")
+        pw = input("비밀번호 : ")
 
+        while True:
+            try:
+                inputSubNum = input("LMS 전체 수강 과목 수(숫자) : ")
+                subNum = int(inputSubNum) + 1
+                break
+            except:
+                print("plz enter only numbers")
+
+        driver.get(LOGINURL)
+        driver.find_element(By.NAME, 'usr_id').send_keys(id)
+        driver.find_element(By.NAME, 'usr_pwd').send_keys(pw)
+        driver.find_element(By.XPATH, LOGINBUTTON).click()
+
+        # id,pw가 틀렸을 시 다시 url 들어가면 오류가 뜸
+        try:
+            driver.get(LOGINURL)
+            return subNum
+        except:
+            print("id or pw is incorrect")
+
+
+# 과목 진입
+def EnterSub(currentSubNum):
+    subjectName = ""
+    try:
+        sleep(2)
+        driver.get(LOGINURL)
+        subjectName = driver.find_element(By.XPATH, '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[' + str(
+            currentSubNum) + ']/em').text
+        driver.find_element(By.XPATH,
+                            '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[' + str(currentSubNum) + ']/em').click()
+        driver.find_element(By.XPATH, '//*[@id="menu_lecture_weeks"]').click()
+    except:
+        print("error : 과목 진입 실패")
+
+    print()
+    print(subjectName + "과목에 진입하였습니다.")
+    #*numbers(for admin) : " + str(currentSubNum)
+    print()
+
+
+# *차 찾기(lecture)
+def SearchLectureNum():
+    count = 0
+    while True:
+        for i in lectureBuffer:
+            if i == count:
+                count += 1
+                #print("같아부러" + str(count))
+            #else:
+            #print("달라부러" + str(count))
+        try:
+            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
+                count) + '"]/div/ul/li[1]/ol/li[5]/div/div/div[2]/div[3]')
+            #print(str(count))
+            return count
+        except:
+            count += 1
+            print("...")
+
+    if True:
+        print("error : SearchLectureNum loof escape")
+
+
+# **차 찾기
+def SearchSubLectureNum(lectureNum):
+    count = 10
+    while True:
+
+        try:
+            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
+                lectureNum) + '"]/div/ul/li[1]/ol/li[5]/div/div[' + str(count) + ']/div[2]/div[3]')
+            #print(str(count) + "차시")
+            return count
+        except:
+            count -= 1
+
+        if count <= 0:
+            print("error : **차 search error")
+            break
+
+
+# 시, 분, 초
 def hms(str, s):
     hours = s // 3600
     s = s - hours * 3600
@@ -22,28 +130,30 @@ def hms(str, s):
     print(str, hours, '시간', mu, '분', ss, '초')
 
 
-def Run(number, lectureCountNumber):
-    lectureTimeText = driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-        lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div[' + str(number) + ']/div[2]/div[3]').text
-
-    lectureTimeTextSplit = lectureTimeText.split('/')
+# 강의 시간 계산
+def lectureTimeCalculate(subLectureNum, lectureNum):
     search = "분"
 
-    lectureTimeBack = re.findall(r'\d+', lectureTimeTextSplit[2])  # 수정 #정해진 강의 시간
-    size = len(lectureTimeBack)
+    lectureTimeText = driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
+        lectureNum) + '"]/div/ul/li[1]/ol/li[5]/div/div[' + str(subLectureNum) + ']/div[2]/div[3]').text
+    lectureTimeTextSplit = lectureTimeText.split('/')
 
+    # 뒤
+    lectureTimeBack = re.findall(r'\d+', lectureTimeTextSplit[2])  # 정해진 강의 시간
+    size = len(lectureTimeBack)
     if size == 3:
         lectureTimeBackInt = int(lectureTimeBack[0]) * 360 + int(lectureTimeBack[1]) * 60 + int(
             lectureTimeBack[2])
     elif size == 2:
         lectureTimeBackInt = int(lectureTimeBack[0]) * 60 + int(lectureTimeBack[1])
     elif size == 1:
-        if search in lectureTimeTextSplit[1]:
+        if search in lectureTimeTextSplit[2]: ###############################################오류
             lectureTimeBackInt = int(lectureTimeBack[0]) * 60
         else:
             lectureTimeBackInt = int(lectureTimeBack[0])
     hms("강의 시간 : ", lectureTimeBackInt)
 
+    # 앞
     lectureTimeFront = re.findall(r'\d+', lectureTimeTextSplit[0])  # 듣고 있는 강의 시간
     size = len(lectureTimeFront)
     if size == 3:
@@ -56,244 +166,144 @@ def Run(number, lectureCountNumber):
             lectureTimeFrontInt = int(lectureTimeFront[0]) * 60
         else:
             lectureTimeFrontInt = int(lectureTimeFront[0])
-    # hms("내가 들은 시간 : ", lectureTimeFrontInt)
+    hms("내가 듣고 있는 시간 : ", lectureTimeFrontInt)
 
-    if lectureTimeBackInt > lectureTimeFrontInt:  # 이미 들었던 경우는 여기서 걸러짐
+    if lectureTimeBackInt > lectureTimeFrontInt:
         runningTime = lectureTimeBackInt - lectureTimeFrontInt
-
         hms("남은 강의 시간 : ", runningTime)
+        return runningTime
+    else:
+        #print("들은 강의, 강의시간 오류")
+        return False
+
+
+# 강의 진행
+def RunLecture(subLectureNum, lectureNum):
+    runningTime = lectureTimeCalculate(subLectureNum, lectureNum)
+
+    if runningTime:
         try:
             driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-                lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div[' + str(number) + ']/div[1]/div/span').click()
-            sleep(6)
+                lectureNum) + '"]/div/ul/li[1]/ol/li[5]/div/div[' + str(subLectureNum) + ']/div[1]/div/span').click()
+            sleep(3)
+            driver.find_element(By.XPATH, '/html/body').click()
+            driver.find_element(By.XPATH, '/html/body').send_keys(Keys.SPACE)
+            print("\n<강의 재생>\n")
 
+            sec = runningTime + 5
+            while (sec != 0):
+                sec = sec - 1
+                sleep(1)
+                hms("남은 시간 : ", sec)
 
-            try:
-                driver.find_element(By.XPATH, '//*[@id="front-screen"]/div/div[2]/div[1]').click()
-                driver.find_element(By.XPATH, '//*[@id="front-screen"]/div/div[2]/div[1]').send_keys(Keys.SPACE)
-                print('front-screen')
-            except:
-                driver.find_element(By.XPATH, '//*[@id="test_player_html5_api"]').click()
-                driver.find_element(By.XPATH, '//*[@id="test_player_html5_api"]').send_keys(Keys.SPACE)
-                print('html_api')
-
-
-            print()
-            print("<강의 재생>")
-            print()
-            print("초 지나가는 건 아직 안넣었음. 야~~~~ 기분 좋다")
-            sleep(runningTime + 5)
-            driver.find_element(By.XPATH, '//*[@id="close_"]').click()
-            print()
-            print("<강의 종료>")
-            print()
+            driver.find_element(By.XPATH, '//*[@id="close_"]').click()  # 출석 종료 버튼
+            print("\n<강의 종료>\n")
             sleep(5)
+            driver.back()
+            sleep(2)
+            driver.forward()
+            sleep(2)
         except:
-            print()
-            print("<학습 기간이 아니거나 오류가 발생했습니다>")
-            print()
-            return False
-    else:
-        return lectureCountNumber
+            print("\nwarning : 학습 기간이 아니거나 오류가 발생했습니다.")
+            return False, runningTime
+
+    #print("RunLecture : lectureNum 보내기 성공")
+    return int(lectureNum), runningTime
 
 
-# driver = webdriver.Chrome() #같은 경로에 있으면 ()빈값 ㄱㅊ
-# console에 표시되는 오류지우기
-options = webdriver.ChromeOptions()
-options.add_experimental_option('excludeSwitches', ['enable-logging'])
-driver = webdriver.Chrome(options=options)
-driver.set_window_position(0, 0)
-driver.set_window_size(700, 1000)
+currentSubNum = 2
+subNum = Login()
+sleep(1)
 
-print("=" * 60)
-print("경운대학교 LMS 강의 매크로(1.0.0) made by K.J.H")
-print("=" * 60)
-
-adminNumber = 2
-"""
-CLASS1 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[2]/em'
-CLASS2 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[3]/em'
-CLASS3 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[4]/em'
-CLASS4 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[5]/em'
-CLASS5 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[6]/em'
-CLASS6 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[7]/em'
-CLASS7 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[8]/em'
-CLASS8 = '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[9]/em'
-"""
-LOGINURL = 'https://lms.ikw.ac.kr/ilos/main/member/login_form.acl'
-LOGINBUTTON = '//*[@id="login_btn"]'
-ONLINECLASS = '//*[@id="menu_lecture_weeks"]'
-DOMAIN = 'https://lms.ikw.ac.kr/ilos/st/course/online_list_form.acl?WEEK_NO='
-# https://eclass.seoultech.ac.kr/ilos/st/course/online_list_form.acl?WEEK_NO= (서울과기대)
-
-# 서울 과기대는 들은시간 / 총 강의시간
-# 경운대는 들은시간 / 기간 외 학습 시간 /총강의 시간
-
+# 과목 전체 루프
 while True:
-    id = input("아이디를 입력해주십시오 : ")
-    pw = input("비밀번호를 입력해주십시오 : ")
+    EnterSub(currentSubNum)
+    currentSubNum += 1
 
-    while True:
-        try:
-            subNumber = input("LMS로 듣고 있는 전체 수강 과목 수를 모두 입력해주십시오(숫자만 입력) : ")
-            intSubNumber = int(subNumber) + 1
-            break
-        except:
-            print("숫자만 입력해주십시오.")
+    # *주차 확인 루프 진입
+    allWeekElement = driver.find_elements(By.CSS_SELECTOR, '#chart > div > div')  # *주 박스 나누기
+    for weekElement in allWeekElement:
+        completeLectureNum = 0  # 완료된 lecture 번호
+        lectureNum = 0  # lecture 번호
+        subLectureNum = 0  # sub lecture 번호 (차시)
+        #lectureBuffer = [0 for i in range(100)]
+        lectureBuffer.clear()
+        weekElementNumText = weekElement.find_element(By.CLASS_NAME, "wb-week").text
+        weekElementProgText = weekElement.find_element(By.CLASS_NAME, "wb-status").text
+        weekElementProgTextSplit = weekElementProgText.split('/')
+        check = int(weekElementProgTextSplit[1]) - int(weekElementProgTextSplit[0])  # 1/3 같이 주차 밑에 있는 숫자 확인
+        #print(weekElementNumText)
+        #print(weekElementProgText)
 
-    driver.get(LOGINURL)
-    driver.find_element(By.NAME, 'usr_id').send_keys(id)
-    driver.find_element(By.NAME, 'usr_pwd').send_keys(pw)
-    driver.find_element(By.XPATH, LOGINBUTTON).click()
+        # *주 존재여부 확인 and 1/3와 같이 듣지 않은 강의가 있는지 확인  -> 없을 시 다음 주차로 넘어감
+        if weekElementNumText != '' and check != 0:
 
-    try:
-        driver.get(LOGINURL)
-        break
-    except:
-        print("아이디 혹은 비밀번호가 틀렸습니다.")
+            count = 0
+            loofcheck = 0 #RunLecture()함수의 2번째 반환값.
+            # 한 주차 루프
+            while True:
+                count += 1
+                lastTime = 0
+                try:
+                    weekElement.find_element(By.TAG_NAME, "span").click()
+                except:
+                    pass
+                    #print("error : *주차 버튼이 클릭 되지 않음")
 
-while True:
+                lectureNum = SearchLectureNum()
+                print()
+                subLectureNum = SearchSubLectureNum(lectureNum)
+                print()
+                # print("lectureNum : " + str(lectureNum))
+                # print("subLectureNum : " + str(subLectureNum))
 
-    sleep(2)
-    driver.get(LOGINURL)
-
-    subjectName = driver.find_element(By.XPATH,
-                                      '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[' + str(adminNumber) + ']/em').text
-    driver.find_element(By.XPATH, '//*[@id="contentsIndex"]/div[2]/div[2]/ol/li[' + str(adminNumber) + ']/em').click()
-    driver.find_element(By.XPATH, ONLINECLASS).click()
-
-    print()
-    print(subjectName + "과목에 진입하였습니다. *numbers(for admin) : " + str(adminNumber))
-    print()
-    adminNumber += 1
-
-
-    allWeekElement = driver.find_elements(By.CSS_SELECTOR, '#chart > div > div')  # ~주 박스 나누기
-
-
-    for weekOfNumber in allWeekElement:  # ~주 박스 카운터식으로 반복문 돔
-
-        weekOfNumberText = weekOfNumber.find_element(By.CLASS_NAME, "wb-week").text
-        progressNumberText = weekOfNumber.find_element(By.CLASS_NAME, "wb-status").text
-        #print(weekOfNumberText)
-        #print(progressNumberText)
-
-        completeLectureNumber = 0  # 주차 바뀔때마다 초기화
-        if weekOfNumberText != '':  # ~주 박스 확인
-            progressNumberTextSplit = progressNumberText.split('/')
-
-            if (int(progressNumberTextSplit[1]) - int(progressNumberTextSplit[0])) != 0:
-
-                # 여기 안에서 다돌게끔 만들어야함 ---------------------------------------------------------------------------
-                while True:
-                    try:
-                        weekOfNumber.find_element(By.TAG_NAME, "span").click()  # 완료되지 않은 주 클릭
-                    except:
-                        pass
-
-                    # lecture 번호만 찾기
-                    lectureCountNumber = 1
-                    while True:
-                        try:
-                            if lectureCountNumber == completeLectureNumber: #이미 들은 lecture는 제외
-                                lectureCountNumber += 1
-
-                            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-                                lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div/div[2]/div[3]')
-                            break
-                        except:
-                            lectureCountNumber += 1
-                            # sleep(0.5)
-                            print("...")
-
-                    print()
-                    # 해당 lecture-?에 몇 차시 까지 있는지 확인하고 돌리기
-                    chasi = 0
-                    while True:
-                        try:
-                            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-                                lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div[2]/div[2]/div[3]')
-                        except:
-                            print("1차시")
-                            chasi = 1
-                            break
-                        try:
-                            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-                                lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div[3]/div[2]/div[3]')
-                        except:
-                            print("2차시")
-                            chasi = 2
-                            break
-                        try:
-                            driver.find_element(By.XPATH, '//*[@id="lecture-' + str(
-                                lectureCountNumber) + '"]/div/ul/li[1]/ol/li[5]/div/div[4]/div[2]/div[3]')
-                            print("4차시")
-                            chasi = 4
-                        except:
-                            print("3차시")
-                            chasi = 3
-                            break
-
-                    bucket = 0
-                    if chasi == 1:
-                        bucket = Run(1, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                    elif chasi == 2:
-                        bucket = Run(1, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(2, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                    elif chasi == 3:
-                        bucket = Run(1, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(2, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(3, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                    elif chasi == 4:
-                        bucket = Run(1, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(2, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(3, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-                        bucket = Run(4, lectureCountNumber)
-                        if bucket == False:
-                            break
-                        else:
-                            completeLectureNumber = bucket
-
-                    if (int(progressNumberTextSplit[1]) - int(progressNumberTextSplit[0])) == 0:  # 강의를 다들은거지
+                if subLectureNum == 1:
+                    completeLectureNum, loofcheck = RunLecture(1, lectureNum)
+                    if completeLectureNum == False:
+                        break
+                elif subLectureNum == 2:
+                    completeLectureNum, loofcheck = RunLecture(1, lectureNum)
+                    completeLectureNum, loofcheck = RunLecture(2, lectureNum)
+                    if completeLectureNum == False:
+                        break
+                elif subLectureNum == 3:
+                    completeLectureNum, loofcheck = RunLecture(1, lectureNum)
+                    completeLectureNum, loofcheck = RunLecture(2, lectureNum)
+                    completeLectureNum, loofcheck= RunLecture(3, lectureNum)
+                    if completeLectureNum == False:
+                        break
+                elif subLectureNum == 4:
+                    completeLectureNum, loofcheck = RunLecture(1, lectureNum)
+                    completeLectureNum, loofcheck = RunLecture(2, lectureNum)
+                    completeLectureNum, loofcheck = RunLecture(3, lectureNum)
+                    completeLectureNum, loofcheck = RunLecture(4, lectureNum)
+                    if completeLectureNum == False:
                         break
 
-    if adminNumber > intSubNumber:  # 8대신에 subject넣으면 됨!!!!!! #과목 넘기면 종료
-        print("프로그램을 종료합니다.")
+                # 버퍼에 값넣기
+                lectureBuffer.append(completeLectureNum)
+                #for i in lectureBuffer:
+                #    print(i)
+
+                # loofcheck이 true라는 것은 lectureNum에 runningtime이 있는거고 false는 lectureNum에 runningtime이 없는거임.
+                # 즉 loofcheck이 false면 다른 남은 강의를 찾아야한다는 것임. 루프를 한번 더 돌게 해야함
+                if loofcheck == False:
+                    if count == 0:
+                        count = 0
+                    else:
+                        count -= 1
+
+                # loofcheck에 runningtime이 있다는 것은 강의를 Run했다는 것이고 count를 활용해 남은 강의가 있는지 없는지 확인을 해야함.
+                if count == check and loofcheck != False:
+                    print(weekElementNumText + "차 종료")
+                    break
+
+
+        #else:
+        #print("다음 주차 진입")
+
+    # 과목 수 초과 시 프로그램 종료
+    if currentSubNum > subNum:
+        print("프로그램 종료")
         driver.close()
         break
