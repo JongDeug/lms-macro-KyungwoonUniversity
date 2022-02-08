@@ -1,3 +1,19 @@
+# *********** 필 독 ***********
+# 1. 크롬 드라이버를 설치해주세요. <참고 https://chromedriver.chromium.org/downloads>
+# 1.1 크롬 드라이버 버전을 확인하고 싶다면 크롬 주소창에 chrome://version를 입력해
+# 주신 뒤 제일 상단에 숫자를 확인하시면 됩니다.
+# 2. 설치한 chromedriver.exe를 파일에 함께 넣어주신 뒤 실행해주세요.
+#
+#
+#
+#
+# *********** 오 류 ***********
+# 1. 프로그램이 실행되지 않을 경우
+# https://m.blog.naver.com/PostView.naver?isHttpsRedirect=true&blogId=govlaos3444&logNo=221421842360
+# 를 참고해주세요.
+#
+# 해킹 프로그램이 절대 아니므로 안심하셔도 됩니다.
+
 from selenium import webdriver
 from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.common.by import By
